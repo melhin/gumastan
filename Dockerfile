@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
@@ -27,13 +27,22 @@ ENV UV_NO_INSTALLER_METADATA=1
 COPY pyproject.toml .
 RUN uv pip install --system -r pyproject.toml
 
-# Application code + model files (baked into the image for cloud deploy).
+# Application code (model files are downloaded below, not committed to git).
 COPY . .
 
-# Pre-download OCR weights and verify extraction model at build time.
+# Download the ONNX extraction model, pre-download OCR weights, and verify both.
+RUN python scripts/download_models.py
 RUN python scripts/check_setup.py
+
+# Collect static files so WhiteNoise can serve them in production.
+RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000
 
-# One worker keeps memory flat; scale by running more containers.
-CMD ["gunicorn", "gumastan.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1"]
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
+
+# Run the web workers and the db_worker command worker in one container.
+# Dependencies are installed into the system interpreter above, so call it
+# directly instead of `uv run` (which would create and sync a .venv).
+CMD ["./entrypoint.sh"]

@@ -43,7 +43,8 @@ def _verify_extraction_model() -> None:
     missing = [f for f in required if not (model_path / f).is_file()]
     if missing:
         print(
-            f"Model directory {model_path} is missing: {missing}",
+            f"Model directory {model_path} is missing: {missing}. "
+            "Run `python scripts/download_models.py` to fetch the model.",
             file=sys.stderr,
         )
         sys.exit(1)

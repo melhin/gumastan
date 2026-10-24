@@ -1,8 +1,11 @@
 services:
   gumastan:
-    build: .
     ports:
       - "8000:8000"
+    # Hard cap at 2 CPUs (same as `docker run --cpus=2`).
+    cpus: 2.0
+    # Hard memory cap (same as `docker run --memory=3g`).
+    mem_limit: 2g
     environment:
       # Already set in Dockerfile; override here if needed.
       EVENT_MODEL_PATH: /app/models

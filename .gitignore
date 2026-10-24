@@ -143,3 +143,9 @@ uv.lock
 *.db
 jobs/
 cache/
+
+staticfiles/*
+
+# Downloaded ONNX model files (run scripts/download_models.py)
+models/*
+!models/.gitkeep

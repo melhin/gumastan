@@ -3,51 +3,20 @@
 from __future__ import annotations
 
 import json
-import threading
-from functools import lru_cache
+import tempfile
 from pathlib import Path
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from core.extraction.exceptions import ExtractionError
-from core.extraction.exceptions import JSONParseError
-from core.extraction.exceptions import LLMError
-from core.extraction.exceptions import ModelLoadError
-from core.extraction.exceptions import OCRError
-from core.extraction.pipeline import ExtractionPipeline
+from core.models import ExtractionJob
 from core.pipelines import TASKS
+from core.tasks import run_extraction
 
 MAX_BODY_BYTES = getattr(settings, "MAX_BODY_BYTES", 20 * 1024 * 1024)
-
-_inference_lock = threading.Lock()
-_pipeline_error: str | None = None
-
-
-@lru_cache(maxsize=1)
-def _get_pipeline() -> ExtractionPipeline:
-    """Load the models once per process."""
-    return ExtractionPipeline(Path(settings.EVENT_MODEL_PATH))
-
-
-def _pipeline() -> ExtractionPipeline | JsonResponse:
-    """Return the loaded pipeline, or a JsonResponse if the model is missing."""
-    global _pipeline_error  # noqa: PLW0603
-    if _pipeline_error is not None:
-        return JsonResponse(
-            {"error": f"model not loaded: {_pipeline_error}"},
-            status=503,
-        )
-    try:
-        return _get_pipeline()
-    except Exception as exc:  # noqa: BLE001
-        _pipeline_error = str(exc)
-        return JsonResponse(
-            {"error": f"model not loaded: {_pipeline_error}"},
-            status=503,
-        )
 
 
 def _read_source(request: HttpRequest) -> str | Path | bytes:
@@ -81,6 +50,13 @@ def _read_source(request: HttpRequest) -> str | Path | bytes:
     raise ValueError(msg)
 
 
+def _write_temp_file(source: bytes, suffix: str) -> str:
+    """Persist raw request bytes to a temp file and return its path."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(source)
+        return tmp.name
+
+
 @require_GET
 def health_check(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"status": "ok"})
@@ -88,7 +64,7 @@ def health_check(request: HttpRequest) -> JsonResponse:
 
 @csrf_exempt
 @require_POST
-def extract(request: HttpRequest, task: str) -> JsonResponse:
+async def extract(request: HttpRequest, task: str) -> JsonResponse:
     task_config = TASKS.get(task)
     if task_config is None:
         known = ", ".join(TASKS.keys())
@@ -98,51 +74,52 @@ def extract(request: HttpRequest, task: str) -> JsonResponse:
         )
 
     try:
-        source = _read_source(request)
+        source = await sync_to_async(_read_source, thread_sensitive=False)(request)
     except (KeyError, TypeError, ValueError) as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
-    maybe_pipeline = _pipeline()
-    if isinstance(maybe_pipeline, JsonResponse):
-        return maybe_pipeline
+    if isinstance(source, Path):
+        source_path = str(source)
+    else:
+        content_type = request.content_type or ""
+        if content_type.startswith("image/"):
+            ext = content_type.split("/")[-1].split("+")[0]
+            suffix = f".{ext}"
+        else:
+            suffix = ".bin"
+        source_path = await sync_to_async(_write_temp_file, thread_sensitive=False)(
+            source, suffix
+        )
 
+    job = await ExtractionJob.objects.acreate(
+        task_name=task,
+        source_path=source_path,
+        status=ExtractionJob.Status.PENDING,
+    )
+
+    await run_extraction.aenqueue(job.id)
+
+    return JsonResponse({"job_id": job.id, "status": job.status})
+
+
+@require_GET
+def job_status(request: HttpRequest, job_id: int) -> JsonResponse:
     try:
-        with _inference_lock:
-            result = maybe_pipeline.run(source, task_config)
-    except OCRError as exc:
-        return JsonResponse(
-            {"error": "ocr_failed", "message": str(exc)},
-            status=422,
-        )
-    except JSONParseError as exc:
-        return JsonResponse(
-            {"error": "model_output_unparseable", "message": str(exc)},
-            status=422,
-        )
-    except LLMError as exc:
-        return JsonResponse(
-            {"error": "model_generation_failed", "message": str(exc)},
-            status=500,
-        )
-    except ModelLoadError as exc:
-        return JsonResponse(
-            {"error": "model_load_failed", "message": str(exc)},
-            status=503,
-        )
-    except ExtractionError as exc:
-        return JsonResponse(
-            {"error": "extraction_failed", "message": str(exc)},
-            status=422,
-        )
-    except FileNotFoundError as exc:
-        return JsonResponse(
-            {"error": "file_not_found", "message": str(exc)},
-            status=400,
-        )
-    except Exception as exc:  # noqa: BLE001
-        return JsonResponse(
-            {"error": "internal_error", "message": str(exc)},
-            status=500,
-        )
+        job = ExtractionJob.objects.get(pk=job_id)
+    except ExtractionJob.DoesNotExist:
+        return JsonResponse({"error": "not found"}, status=404)
 
-    return JsonResponse(result.model_dump(mode="json"))
+    data = {
+        "job_id": job.id,
+        "status": job.status,
+        "task_name": job.task_name,
+        "created_at": job.created_at.isoformat(),
+    }
+    if job.finished_at:
+        data["finished_at"] = job.finished_at.isoformat()
+    if job.status == ExtractionJob.Status.SUCCEEDED:
+        data["result"] = job.result
+    elif job.status == ExtractionJob.Status.FAILED:
+        data["error"] = job.error_message
+
+    return JsonResponse(data)

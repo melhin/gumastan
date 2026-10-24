@@ -1,11 +1,14 @@
-# Place ONNX model files here:
+# Model files live here but are intentionally NOT committed to git.
+#
+# Download them with:
+#   python scripts/download_models.py
+#
+# This fetches the CPU variant of onnx-community/Qwen3-0.6B-ONNX and writes:
 #   - genai_config.json
 #   - config.json
 #   - tokenizer.json
 #   - tokenizer_config.json
-#   - special_tokens_map.json
-#   - vocab.json / merges.txt (if needed by tokenizer)
-#   - onnx/
-#       - model.onnx (or model_q4.onnx, etc. -- point genai_config to whichever one)
+#   - chat_template.jinja
+#   - model.onnx
 #
 # Set EVENT_MODEL_PATH env var to point to a different directory if needed.

@@ -34,7 +34,7 @@ def check_model_files(app_configs, **kwargs):
         errors.append(
             Error(
                 f"Model directory does not exist: {model_path}",
-                hint="Place the ONNX model files in that directory, "
+                hint="Run `python scripts/download_models.py` to fetch the model, "
                      "or set EVENT_MODEL_PATH env var to the correct path.",
                 id="extraction.E002",
             ),
@@ -46,7 +46,8 @@ def check_model_files(app_configs, **kwargs):
             errors.append(
                 Error(
                     f"Model directory is missing required file: {filename}",
-                    hint=f"Ensure {filename} is present in {model_path}.",
+                    hint=f"Run `python scripts/download_models.py` to fetch the model "
+                         f"into {model_path}.",
                     id="extraction.E003",
                 ),
             )
