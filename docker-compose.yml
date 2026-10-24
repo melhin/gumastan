@@ -1,0 +1,10 @@
+services:
+  gumastan:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Already set in Dockerfile; override here if needed.
+      EVENT_MODEL_PATH: /app/models
+      DEBUG: "0"
+    # No volume mount needed — model is baked into the image.

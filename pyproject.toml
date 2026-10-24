@@ -1,0 +1,43 @@
+[project]
+name = "gumastan"
+version = "0.1.0"
+description = "Minimal Django project with pluggable layers"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.1,<6.0",
+    "gunicorn>=23.1",
+    "onnxruntime-genai>=0.18.0",
+    "pydantic>=2.10",
+    "rapidocr>=3.10.0",
+    "rapidocr-onnxruntime>=1.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.11",
+    "black>=25.0",
+    "pre-commit>=4.6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]

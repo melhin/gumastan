@@ -1,0 +1,11 @@
+# Place ONNX model files here:
+#   - genai_config.json
+#   - config.json
+#   - tokenizer.json
+#   - tokenizer_config.json
+#   - special_tokens_map.json
+#   - vocab.json / merges.txt (if needed by tokenizer)
+#   - onnx/
+#       - model.onnx (or model_q4.onnx, etc. -- point genai_config to whichever one)
+#
+# Set EVENT_MODEL_PATH env var to point to a different directory if needed.
