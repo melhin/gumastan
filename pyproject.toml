@@ -1,7 +1,7 @@
 [project]
 name = "gumastan"
 version = "0.1.0"
-description = "Minimal Django project with pluggable layers"
+description = "Minimal Django project demonstrating extraction pipeline"
 requires-python = ">=3.14"
 dependencies = [
     "django>=6.0",
@@ -43,10 +43,3 @@ indent-style = "space"
 [tool.black]
 line-length = 100
 target-version = ["py312"]
-
-[[tool.uv.index]]
-name = "testpypi"
-url = "https://test.pypi.org/simple/"
-# Only use TestPyPI for packages that name it in [tool.uv.sources].
-# Without this, uv would also look for `django` there and find only 3.1.x.
-explicit = true
